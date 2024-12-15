@@ -7,12 +7,12 @@
 #define DEVICE_H
 
 #include <stdint.h>
+#include <array>
 
 #define CAP_MOUSE	0x1
 #define CAP_MOUSE_ABS	0x2
 #define CAP_KEYBOARD	0x4
-
-#define MAX_DEVICES	64
+#define CAP_LEDS	0x8
 
 struct device {
 	/*
@@ -21,13 +21,15 @@ struct device {
 	 */
 	int fd;
 
-	uint8_t grabbed;
-	uint8_t capabilities;
-	uint8_t is_virtual;
+	uint8_t grabbed : 1;
+	uint8_t is_virtual : 1;
+	uint8_t capabilities : 6;
 
-	char id[64];
-	char name[64];
-	char path[256];
+	char id[23];
+	uint32_t num;
+	char name[96];
+
+	uint8_t led_state[LED_CNT];
 
 	/* Internal. */
 	uint32_t _maxx;
@@ -39,34 +41,37 @@ struct device {
 	void *data;
 };
 
+enum class dev_event_e : signed char {
+	DEV_KEY,
+	DEV_LED,
+
+	DEV_MOUSE_MOVE,
+	/* All absolute values are relative to a resolution of 1024x1024. */
+	DEV_MOUSE_MOVE_ABS,
+	DEV_MOUSE_SCROLL,
+
+	DEV_REMOVED,
+};
+
+using enum dev_event_e;
+
 struct device_event {
-	enum {
-		DEV_KEY,
-		DEV_LED,
-
-		DEV_MOUSE_MOVE,
-		/* All absolute values are relative to a resolution of 1024x1024. */
-		DEV_MOUSE_MOVE_ABS,
-		DEV_MOUSE_SCROLL,
-
-		DEV_REMOVED,
-	} type;
-
-	uint8_t code;
+	enum dev_event_e type;
 	uint8_t pressed;
-	uint32_t x;
-	uint32_t y;
+	uint16_t code;
+	int32_t x;
+	int32_t y;
 };
 
 
 struct device_event *device_read_event(struct device *dev);
 
-int device_scan(struct device devices[MAX_DEVICES]);
+size_t device_scan(std::array<device, 128>& devices);
 int device_grab(struct device *dev);
 int device_ungrab(struct device *dev);
 
 int devmon_create();
 int devmon_read_device(int fd, struct device *dev);
-void device_set_led(const struct device *dev, int led, int state);
+void device_set_led(const struct device *dev, uint8_t led, int state);
 
 #endif

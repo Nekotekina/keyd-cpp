@@ -3,33 +3,59 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <memory>
+#include <string_view>
+#include "utils.hpp"
+
+enum class macro_e : uint16_t {
+	MACRO_KEY_SEQ = 0,
+	MACRO_KEY_TAP = 1,
+	MACRO_HOLD,
+	MACRO_RELEASE,
+	MACRO_UNICODE,
+	MACRO_TIMEOUT,
+	MACRO_COMMAND,
+
+	MACRO_MAX,
+};
+
+using enum macro_e;
+
+static_assert(static_cast<uint16_t>(MACRO_MAX) < 64);
+static_assert(MACRO_KEY_SEQ < MACRO_KEY_TAP);
 
 struct macro_entry {
-	enum {
-		MACRO_KEYSEQUENCE,
-		MACRO_HOLD,
-		MACRO_RELEASE,
-		MACRO_UNICODE,
-		MACRO_TIMEOUT
-	} type;
-
-	uint16_t data;
+	enum macro_e type : 6;
+	uint16_t id : 10;
+	union {
+		struct {
+			uint8_t mods;
+			uint8_t wildc;
+		} mods;
+		uint16_t code;
+	};
 };
+
+static_assert(sizeof(macro_entry) == 4);
 
 /*
- * A series of key sequences optionally punctuated by
- * timeouts
+ * A series of key sequences, timeouts, shell commands
  */
 struct macro {
-	struct macro_entry entries[64];
+	uint32_t size;
+	macro_entry entry;
+	std::unique_ptr<macro_entry[]> entries;
 
-	uint32_t sz;
+	const macro_entry& operator[](size_t idx) const
+	{
+		assert(idx < size);
+		return size == 1 ? entry : entries[idx];
+	}
+
+	bool equals(const struct config*, const macro&) const;
 };
 
+uint64_t macro_execute(void (*output)(uint16_t, uint8_t), const macro& macro, uint64_t timeout, struct config* config);
 
-void macro_execute(void (*output)(uint8_t, uint8_t),
-		   const struct macro *macro,
-		   size_t timeout);
-
-int macro_parse(char *s, struct macro *macro);
+int macro_parse(std::string_view, macro& macro, struct config* config, const smart_ptr<struct env_pack>&);
 #endif
